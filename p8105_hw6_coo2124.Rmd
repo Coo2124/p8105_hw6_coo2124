@@ -1,0 +1,141 @@
+---
+title: "p8105_hw6_coo2124"
+author: "Christiana Odewumi"
+date: "2024-12-01"
+output: github_document
+---
+
+# Load libraries
+```{r}
+library(rnoaa)
+library(tidyverse)
+library(broom)
+library(ggplot2)
+library(modelr)
+library(mgcv)
+library(purrr)
+
+set.seed(1)
+
+
+knitr::opts_chunk$set(
+	echo = TRUE,
+	warning = FALSE,
+	fig.width = 8, 
+  fig.height = 6,
+  out.width = "90%"
+)
+
+theme_set(theme_minimal() + theme(legend.position = "bottom"))
+
+options(
+  ggplot2.continuous.colour = "viridis",
+  ggplot2.continuous.fill = "viridis"
+)
+
+scale_colour_discrete = scale_colour_viridis_d
+scale_fill_discrete = scale_fill_viridis_d
+```
+
+### Problem 1
+Download and prepare the 2017 Central Park weather data
+```{r}
+weather_df = 
+  rnoaa::meteo_pull_monitors(
+    c("USW00094728"),
+    var = c("PRCP", "TMIN", "TMAX"), 
+    date_min = "2017-01-01",
+    date_max = "2017-12-31") %>%
+  mutate(
+    name = recode(id, USW00094728 = "CentralPark_NY"),
+    tmin = tmin / 10,
+    tmax = tmax / 10) %>%
+  select(name, id, everything())
+
+weather_df %>% 
+  ggplot(aes(x = tmin, y = tmax)) + 
+  geom_point() + 
+  labs(
+    title = "Relationship Between Daily Minimum and Maximum Temperatures (2017)",
+    x = "Minimum Temperature (°C)",
+    y = "Maximum Temperature (°C)"
+  ) +
+  theme_minimal()
+```
+
+we are interested in the distribution of two quantities estimated from these data
+
+```{r}
+compute_metrics = function(weather_sample) {
+  model = lm(tmax ~ tmin, data = weather_sample)
+  r_squared = glance(model)$r.squared
+  coefficients = tidy(model)
+  
+  intercept = coefficients |>
+    filter(term == "(Intercept)")|>
+    pull(estimate)
+  
+  slope = coefficients|>
+    filter(term == "tmin") |> 
+    pull(estimate)
+  
+  log_beta_product = ifelse(intercept * slope > 0, log(intercept * slope), NA)
+  
+  tibble(
+    r_squared = r_squared,
+    log_beta_product = log_beta_product
+  )
+}
+```
+
+Use 5000 bootstrap samples and, for each bootstrap sample, produce estimates of these two quantities.
+```{r}
+bootstrap_results <- 
+  weather_df |> 
+  modelr::bootstrap(n = 5000) |> 
+  mutate(
+    models = map(strap,as_tibble),
+    results = map(models, compute_metrics),
+  ) |> 
+  unnest(results)
+
+```
+
+Plot the distribution of your estimates, and describe these in words.
+```{r}
+ggplot(bootstrap_results, aes(x = r_squared)) +
+  geom_histogram(binwidth = 0.01, fill = "blue", color = "black", alpha = 0.7) +
+  labs(
+    title = "Distribution of R-Squared from 5000 Bootstrap Samples",
+    x = "R-Squared",
+    y = "Frequency"
+  ) +
+  theme_minimal()
+
+```
+The histogram shows the distribution of r-square values from 5000 bootstrap samples, centered around 0.91, indicating the model consistently explains about 91% of the variability in the data. The distribution is unimodal with a slight left skew and minimal spread, suggesting the model's performance is robust and reliable across samples. Only a few samples have r-square values below 0.90 or above 0.92, further highlighting the model's stability.
+
+```{r}
+ggplot(bootstrap_results, aes(x = log_beta_product)) +
+  geom_histogram(binwidth = 0.01, fill = "pink", color = "black", alpha = 0.7) +
+  labs(
+    title = "Distribution of log(beta0 * beta1) from 5000 Bootstrap Samples",
+    x = "log(beta0 * beta1)",
+    y = "Frequency"
+  ) +
+  theme_minimal()
+
+```
+The histogram shows the distribution of log(𝛽̂ 0∗𝛽̂ 1) from 5000 bootstrap samples. The distribution is unimodal and symmetric, centered around approximately 2.02. The spread is narrow, indicating minimal variability in the logarithm of the product of the coefficients. This suggests that the relationship between the intercept and slope in the regression model is consistent and stable across bootstrap samples.
+
+```{r}
+summary_results = bootstrap_results |> 
+  summarize(
+    r_squared_lower = quantile(r_squared, 0.025),
+    r_squared_upper = quantile(r_squared, 0.975),
+    log_beta_product_lower = quantile(log_beta_product, 0.025),
+    log_beta_product_upper = quantile(log_beta_product, 0.975)
+  )
+summary_results
+```
+The 95% confidence intervals are 0.894–0.927 for r-square and 1.967–2.058 for log(𝛽̂ 0∗𝛽̂) , indicating the model's reliability and consistency.
