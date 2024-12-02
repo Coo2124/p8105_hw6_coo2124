@@ -45,14 +45,14 @@ weather_df =
     c("USW00094728"),
     var = c("PRCP", "TMIN", "TMAX"), 
     date_min = "2017-01-01",
-    date_max = "2017-12-31") %>%
+    date_max = "2017-12-31") |>
   mutate(
     name = recode(id, USW00094728 = "CentralPark_NY"),
     tmin = tmin / 10,
-    tmax = tmax / 10) %>%
+    tmax = tmax / 10) |>
   select(name, id, everything())
 
-weather_df %>% 
+weather_df |> 
   ggplot(aes(x = tmin, y = tmax)) + 
   geom_point() + 
   labs(
@@ -259,7 +259,7 @@ summary(hypothesized_model)
 Describe your modeling process and show a plot of model residuals against fitted values – use add_predictions and add_residuals in making this plot.
 ```{r}
 birthweight_cleaned = birthweight_cleaned |>
-  add_predictions(hypothesized_model, var = "predicted_bwt") %>%
+  add_predictions(hypothesized_model, var = "predicted_bwt") |>
   add_residuals(hypothesized_model, var = "residuals_bwt")
 
 ggplot(birthweight_cleaned, aes(x = predicted_bwt, y = residuals_bwt)) +
@@ -315,3 +315,6 @@ results_cv |>
 ```
 
 The violin plot compares the cross-validated RMSE distributions for three models. Model 2 has the lowest RMSE with the least variability, indicating it performs best in terms of prediction accuracy and consistency. Model 1 has higher RMSE but remains relatively stable. The hypothesized model has the highest RMSE and the widest spread, suggesting it is less accurate and consistent. Model 2 is the most reliable for predicting birthweight.
+
+
+
