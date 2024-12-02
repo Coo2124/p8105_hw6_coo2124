@@ -190,8 +190,7 @@ baltimore_results =
     OR = exp (estimate),                   
     adjusted_conf.low = exp (conf.low),   
     adjusted_conf.high = exp(conf.high))|>
-  filter(term == "victim_sexMale") |>
-      select(OR, adjusted_conf.low, adjusted_conf.high) |>
+      select(term, OR, adjusted_conf.low, adjusted_conf.high) |>
   knitr::kable(digits = 3)
 
 baltimore_results
