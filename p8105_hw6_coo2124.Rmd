@@ -236,9 +236,82 @@ ggplot(city_results, aes(x = reorder(city_state, estimate), y = estimate)) +
 ```
 The plot shows significant variation in adjusted odds ratios (ORs) for solving homicides across cities, comparing male to female victims. Cities with ORs above 1 indicate males are more likely to have their cases solved, while ORs below 1 suggest the opposite. Wide confidence intervals in many cities highlight uncertainty. Statistically significant differences appear in cities where confidence intervals do not include 1, while others show no clear gender effect. Overall, the plot emphasizes disparities in homicide resolution rates by gender and the need for further investigation.
 
+### Question 3
+```{r}
+birthweight = read_csv("birthweight.csv", na = c("NA", ".", "")) 
+birthweight_cleaned = birthweight |>
+  mutate(
+    babysex = factor(babysex, labels = c("Male", "Female")), 
+    frace = factor(frace),  
+    mrace = factor(mrace),  
+    malform = factor(malform, labels = c("Absent", "Present"))  
+  ) 
+
+```
+Propose a regression model for birthweight. This model may be based on a hypothesized structure for the factors that underly birthweight, on a data-driven model-building process, or a combination of the two. 
+```{r}
+hypothesized_model = lm(bwt ~ gaweeks + ppbmi + smoken + wtgain + malform, 
+                         data = birthweight_cleaned)
+
+summary(hypothesized_model)
+```
+
+Describe your modeling process and show a plot of model residuals against fitted values – use add_predictions and add_residuals in making this plot.
+```{r}
+birthweight_cleaned = birthweight_cleaned |>
+  add_predictions(hypothesized_model, var = "predicted_bwt") %>%
+  add_residuals(hypothesized_model, var = "residuals_bwt")
+
+ggplot(birthweight_cleaned, aes(x = predicted_bwt, y = residuals_bwt)) +
+  geom_point(alpha = 0.5) +
+  geom_hline(yintercept = 0, linetype = "dashed", color = "red") +
+  labs(
+    title = "Residuals vs Fitted Values",
+    x = "Fitted Birthweight",
+    y = "Residuals"
+  ) +
+  theme_minimal()
+```
 
 
+Compare your model to two others: One using length at birth and gestational age as predictors (main effects only) and One using head circumference, length, sex, and all interactions (including the three-way interaction) between these
+```{r}
+model_1 = lm(bwt ~ blength + gaweeks, data = birthweight_cleaned)
+model_2 = lm(bwt ~ bhead * blength * babysex, data = birthweight_cleaned)
+
+results_cv = crossv_mc(birthweight_cleaned, n = 100) |> 
+  mutate(
+    model_hypothesized = map(train, ~ lm(bwt ~ gaweeks + ppbmi + smoken + wtgain + malform, data = .x)),
+    model_1 = map(train, ~ lm(bwt ~ blength + gaweeks, data = .x)),
+    model_2 = map(train, ~ lm(bwt ~ bhead * blength * babysex, data = .x))
+    )|>
+   mutate(
+    rmse_model_hypothesized = map2_dbl(model_hypothesized, test, ~ rmse(.x, .y)),
+    rmse_model_1 = map2_dbl(model_1, test, ~ rmse(.x, .y)),
+    rmse_model_2 = map2_dbl(model_2, test, ~ rmse(.x, .y))
+  )
+
+results_cv |>
+  summarise(
+    mean_rmse_hypothesized = mean(rmse_model_hypothesized),
+    mean_rmse_model_1 = mean(rmse_model_1),
+    mean_rmse_model_2 = mean(rmse_model_2)
+)|>
+knitr::kable(digits = 3)
+```
 
 
+```{r}
+results_cv |> 
+  select(starts_with("rmse")) |> 
+  pivot_longer(
+    everything(),
+    names_to = "model", 
+    values_to = "rmse",
+    names_prefix = "rmse_") |> 
+  mutate(model = fct_inorder(model)) |> 
+  ggplot(aes(x = model, y = rmse)) + geom_violin()
 
+```
 
+The violin plot compares the cross-validated RMSE distributions for three models. Model 2 has the lowest RMSE with the least variability, indicating it performs best in terms of prediction accuracy and consistency. Model 1 has higher RMSE but remains relatively stable. The hypothesized model has the highest RMSE and the widest spread, suggesting it is less accurate and consistent. Model 2 is the most reliable for predicting birthweight.
